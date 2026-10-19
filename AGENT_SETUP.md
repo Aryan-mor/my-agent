@@ -1,6 +1,6 @@
 # my-agent: guided setup for your AI coding agent
 
-> **For you (the human):** open your AI coding agent (Claude Code, Cursor, Windsurf, ...), paste or attach this file, and say:
+> **For you (the human):** open your AI coding agent (Claude Code, Cursor's Agent, Windsurf, ...), paste or attach this file, and say:
 >
 > **"Set up my-agent for me following AGENT_SETUP.md."**
 >
@@ -10,7 +10,7 @@
 
 ## Instructions to the AI agent
 
-You are setting up **my-agent** (repository: this file's repo) for the user. my-agent lets Claude Code plan and review while a cheap OpenCode agent does the implementation through a local LiteLLM proxy. Read `README.md` once for background.
+You are setting up **my-agent** (repository: this file's repo) for the user. my-agent lets Claude Code and/or Cursor's Agent plan and review while a cheap OpenCode agent does the implementation through a local LiteLLM proxy. Read `README.md` once for background.
 
 ### Rules for you
 
@@ -24,7 +24,7 @@ You are setting up **my-agent** (repository: this file's repo) for the user. my-
      - **Option B:** the user opens `.env` (e.g. `notepad .env`) and pastes it after the `=` themselves, then tells you "done".
    - **Never print, echo, log or repeat a key back**, not even partially. To verify, only check that the line is non-empty (e.g. `(Select-String '^RADOX_API_KEY=.+' .env) -ne $null`).
    - Never commit `.env`. It is already in `.gitignore`.
-5. **Back up before overwriting** any file in the user's home folder (`~/.config/opencode`, `~/.claude`). `scripts\install.ps1` does this automatically.
+5. **Back up before overwriting** any file in the user's home folder (`~/.config/opencode`, `~/.claude`, `~/.cursor`). `scripts\install.ps1` does this automatically.
 6. Use **PowerShell** for all commands. If a command fails, show the relevant error lines, explain them simply, and fix the cause before continuing.
 7. Never commit, push or delete anything of the user's unless they explicitly ask.
 
@@ -53,7 +53,8 @@ Run the checks; install only what is missing (winget ships with Windows 10/11):
 | Node.js LTS (includes npm) | `node --version; npm --version` | `winget install --id OpenJS.NodeJS.LTS -e` |
 | Python 3.11+ | `py -3.11 --version` (or `python --version`) | `winget install --id Python.Python.3.11 -e` (or 3.12 / 3.13) |
 | OpenCode >= 1.19 | `opencode --version` | `npm install -g --allow-scripts=opencode-ai opencode-ai` (if your npm rejects `--allow-scripts`, use `npm install -g opencode-ai`) |
-| Claude Code | `claude --version`, or the Claude Code extension in Cursor / VS Code | see https://docs.claude.com/en/docs/claude-code (the user needs a Claude subscription or API access) |
+| Claude Code (if the user wants it, see Step 7) | `claude --version`, or the Claude Code extension in Cursor / VS Code | see https://docs.claude.com/en/docs/claude-code (the user needs a Claude subscription or API access) |
+| Cursor (if the user wants it, see Step 7) | Cursor is installed and opens | download from https://cursor.com |
 
 After installing, the user may need to **open a new terminal** so PATH updates take effect. If `opencode --version` is lower than 1.19, run `npm install -g opencode-ai@latest`.
 
@@ -136,34 +137,49 @@ First tell the user what exists already:
 Get-ChildItem "$env:USERPROFILE\.config\opencode" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName
 ```
 
-Then run (this also installs the Claude skill, see Step 7; to do only this step add `-SkipSkill`):
+Then run (`-NoClaude -NoCursor` limits it to OpenCode; the planner integrations follow in Step 7):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -SkipSkill
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -NoClaude -NoCursor
 ```
 
-If the user wants rtk (Step 8), re-run later with `-WithRtk -SkipSkill`.
+If the user wants rtk (Step 8), re-run later with `-WithRtk -NoClaude -NoCursor`.
 
 The DCP plugin (`@tarquinen/opencode-dcp`) is listed in the repo's `opencode.json` and is downloaded by OpenCode automatically on first start.
 
-### Step 7 - Install the Claude Code skill
+### Step 7 - Install `/my-agent` for Claude Code, Cursor, or both
 
-Explain: this adds the `/my-agent` command to Claude Code. The file must be UTF-8 **without BOM** (a BOM breaks the skill header), and its `<MY_AGENT_HOME>` placeholder must be replaced with the real absolute path of the repo. `install.ps1` does both:
+**Ask the user first:** "Do you want to use my-agent from **Claude Code** (CLI or the Claude Code extension), from **Cursor's own Agent chat**, or **both**?" Explain: either one acts as the planner and reviewer; my-agent does the coding in both cases. In Cursor the user can pick any model for planning/reviewing.
+
+Explain: this adds a `/my-agent` command. The files are written as UTF-8 **without BOM** (a BOM breaks the Claude skill header), and their `<MY_AGENT_HOME>` placeholder is replaced with the real absolute path of the repo. Existing files are backed up. Run the matching command:
 
 ```powershell
+# Claude Code only  -> ~/.claude/skills/my-agent/SKILL.md
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -SkipOpenCode -NoCursor
+# Cursor only       -> ~/.cursor/commands/my-agent.md
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -SkipOpenCode -NoClaude
+# both
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -SkipOpenCode
 ```
 
-Verify:
+Verify each installed file (no BOM, real path filled in):
 
 ```powershell
-$s = "$env:USERPROFILE\.claude\skills\my-agent\SKILL.md"
-$b = [System.IO.File]::ReadAllBytes($s)[0..2]; if ($b[0] -eq 0xEF) { "BOM PRESENT - fix it" } else { "no BOM - ok" }
-Select-String -Path $s -Pattern "delegate.ps1" | Select-Object -First 1   # must show the real path, no <MY_AGENT_HOME>
+foreach ($s in "$env:USERPROFILE\.claude\skills\my-agent\SKILL.md", "$env:USERPROFILE\.cursor\commands\my-agent.md") {
+  if (-not (Test-Path $s)) { "$s : not installed"; continue }
+  $b = [System.IO.File]::ReadAllBytes($s)[0..2]
+  "$s : " + $(if ($b[0] -eq 0xEF) { "BOM PRESENT - fix it" } else { "no BOM - ok" })
+  if (Select-String -Path $s -Pattern "<MY_AGENT_HOME>" -SimpleMatch -Quiet) { "  placeholder NOT replaced - re-run install.ps1" }
+  Select-String -Path $s -Pattern "delegate.ps1" | Select-Object -First 1     # must show the real repo path
+}
 Test-Path (Join-Path (Get-Location) "scripts\delegate.ps1")
 ```
 
-If the user moves the repo later, re-run this step. Then ask the user to **restart Claude Code / Cursor**.
+Check that the command appears:
+- **Claude Code:** restart Claude Code (or the extension), type `/my` at the start of a message; `my-agent` should be listed.
+- **Cursor:** in Cursor's Agent chat, type `/`; `my-agent` should be in the list. If not, reload the window (Ctrl+Shift+P -> `Developer: Reload Window`) or restart Cursor. If both are installed, Cursor may show `my-agent` twice (Cursor also loads `~/.claude/skills`); both work.
+
+If the user moves the repo later, re-run this step.
 
 ### Step 8 - Optional: graphify and rtk
 
@@ -181,7 +197,7 @@ Then, **per project** (in the project's root folder): build the graph once, e.g.
 **rtk** ([rtk-ai/rtk](https://github.com/rtk-ai/rtk)) compresses command output to save tokens. Install it following its README (it is a single binary; make sure `rtk` is on PATH: `rtk --version`), then:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -WithRtk -SkipSkill
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1 -WithRtk -NoClaude -NoCursor
 ```
 
 Both are optional; everything works without them.
@@ -215,10 +231,11 @@ If it fails: `status` shows the errors; also check `$t\.opencode\delegate\run.er
 ### Step 10 - Tell the user how to use it
 
 Explain in plain words:
-- Open any project in Claude Code / Cursor and type, **at the very start of a message**: `/my-agent <what you want built>` (or `/my-agent <path to a plan .md>`).
-- Claude writes a plan, my-agent implements it, Claude checks it with the project's tests and loops up to 3 times, then reports back.
+- **Claude Code:** open any project and type, **at the very start of a message**: `/my-agent <what you want built>` (or `/my-agent <path to a plan .md>`).
+- **Cursor:** in the Agent chat, type `/`, pick `my-agent`, and add the task. Any model works as the planner/reviewer; that's the user's choice.
+- The planner writes a plan, my-agent implements it, the planner checks it with the project's tests and loops up to 3 times, then reports back. In Cursor, the agent waits in short `wait -Minutes 4` steps; that is normal.
 - Nothing is committed or pushed; review with `git diff` and commit yourself.
-- Tiny fixes (about 3 lines) Claude does directly.
+- Tiny fixes (about 3 lines) the planner does directly.
 - For big projects, build the graphify graph once in the project root for much faster runs.
 - If something goes wrong: see "Tips and troubleshooting" in `README.md`.
 
@@ -226,12 +243,12 @@ Explain in plain words:
 
 ## Verification checklist
 
-- [ ] `git`, `node`, `npm`, Python 3.11+, `opencode` (>= 1.19) and Claude Code all available
+- [ ] `git`, `node`, `npm`, Python 3.11+, `opencode` (>= 1.19) available, plus Claude Code and/or Cursor (as the user chose)
 - [ ] `.env` exists, `LITELLM_MASTER_KEY` and `RADOX_API_KEY` are set (checked without printing values); `.env` is not tracked by git (`git status` does not list it)
 - [ ] `litellm\.venv` exists and `test_proxy.py basic` returned a tool call
 - [ ] `~/.config/opencode/agents/orchestrator.md`, `implementer.md` and `~/.config/opencode/dcp.jsonc` installed (old versions backed up as `*.bak-*`)
-- [ ] `~/.claude/skills/my-agent/SKILL.md` installed, **no BOM**, contains the real path to `scripts\delegate.ps1` (no `<MY_AGENT_HOME>` left)
-- [ ] Claude Code / Cursor restarted and `/my-agent` appears in the slash-command list
+- [ ] Claude Code chosen: `~/.claude/skills/my-agent/SKILL.md` installed, **no BOM**, contains the real path to `scripts\delegate.ps1` (no `<MY_AGENT_HOME>` left); after a restart `/my-agent` is listed
+- [ ] Cursor chosen: `~/.cursor/commands/my-agent.md` installed, **no BOM**, real path filled in; typing `/` in Cursor's Agent chat lists `my-agent` (after `Developer: Reload Window` if needed)
 - [ ] (optional) `graphify --help` works; graph built in the user's main project
 - [ ] (optional) `rtk --version` works and `~/.config/opencode/plugins/rtk.ts` installed
 - [ ] Smoke test: `STATE: FINISHED`, tests in the scratch folder pass

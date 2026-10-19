@@ -4,7 +4,7 @@
 
 my-agent is a small, opinionated coding workflow for **Windows (PowerShell 5.1+)**:
 
-- **Claude Code** (model `sonnet`, e.g. inside the Cursor IDE extension) only **plans** and **reviews**.
+- **Claude Code** (model `sonnet`, e.g. inside the Cursor IDE extension) **or Cursor's own Agent** (any model you pick in Cursor) only **plans** and **reviews**.
 - A cheap **OpenCode** agent called **my-agent** (`orchestrator` + `implementer`) does the actual **implementation**.
 - A local **LiteLLM** proxy routes my-agent's requests to inexpensive providers (RadoxAI, NVIDIA NIM, Gemini, an optional GLM bridge) with instant fallbacks on rate limits and errors.
 
@@ -20,7 +20,7 @@ my-agent **never commits or pushes**.
 
 ```mermaid
 flowchart TD
-    U["You: /my-agent #lt;task or plan file#gt;"] --> P["Claude Code (sonnet)<br/>writes .opencode/plans/#lt;slug#gt;-r1.md<br/>(steps, backticked file paths, done-checks)"]
+    U["You: /my-agent #lt;task or plan file#gt;"] --> P["Planner: Claude Code (sonnet)<br/>or Cursor Agent (any model)<br/>writes .opencode/plans/#lt;slug#gt;-r1.md<br/>(steps, backticked file paths, done-checks)"]
     P --> S["delegate.ps1 start -Plan #lt;plan#gt; -Dir #lt;project#gt;"]
     S --> G{"Plan's file paths<br/>exist under -Dir?"}
     G -- no --> W["exit 2: WRONG PROJECT"]
@@ -39,6 +39,7 @@ flowchart TD
 | Path | What it is | Installed to |
 |---|---|---|
 | `claude/skills/my-agent/SKILL.md` | Claude Code user skill behind `/my-agent` (`disable-model-invocation: true`, `model: sonnet`). Must be **UTF-8 without BOM**. | `~/.claude/skills/my-agent/SKILL.md` |
+| `cursor/commands/my-agent.md` | Cursor Agent custom command behind `/my-agent`: same plan -> delegate -> wait -> review loop, worded for Cursor's agent (runs the terminal itself, `wait -Minutes 4` repeated). Plain markdown, no frontmatter. | `~/.cursor/commands/my-agent.md` |
 | `opencode/agents/orchestrator.md` | Primary OpenCode agent: plans <= 3 steps itself, delegates bigger steps one at a time to `implementer`, graphify before grep, targeted tests while working, full suite once at the end, `graphify update .` at the end, stops with "wrong project" if the plan's files are missing. | `~/.config/opencode/agents/` |
 | `opencode/agents/implementer.md` | Subagent (`steps: 30`): implements exactly one step, graphify-first, edits first then runs checks once. | `~/.config/opencode/agents/` |
 | `opencode/dcp.jsonc` | Config for the [Dynamic Context Pruning](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning) plugin. The `compress` tool is **disabled** (`permission: deny`) because it caused stalls; automatic pruning stays on. | `~/.config/opencode/dcp.jsonc` |
@@ -50,14 +51,14 @@ flowchart TD
 | `litellm/test_proxy.py` | Smoke test for the proxy: streaming, tool calls, mocked 429 fallbacks. | stays in repo |
 | `scripts/agent.ps1` | Launches OpenCode with this config; starts LiteLLM (and the optional GLM bridge) if not running. | stays in repo |
 | `scripts/delegate.ps1` | `start` / `wait` / `status` / `stop` for headless runs (details below). | stays in repo |
-| `scripts/install.ps1` | Copies agents/DCP/(rtk) into `~/.config/opencode`, installs the skill without BOM with `<MY_AGENT_HOME>` filled in. Backs up existing files. | - |
+| `scripts/install.ps1` | Copies agents/DCP/(rtk) into `~/.config/opencode`, installs the Claude skill and the Cursor command without BOM with `<MY_AGENT_HOME>` filled in (`-NoClaude`, `-NoCursor`, `-SkipOpenCode`, `-WithRtk`). Backs up existing files. | - |
 | `scripts/chat.py`, `scripts/list_models.py` | Tiny helpers to test any OpenAI-compatible endpoint and list its models (`OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL`). | - |
 | `examples/sample-plan.md` | Tiny plan used for the smoke test; shows the plan and progress-checklist formats. | - |
 
 ## Requirements
 
 - **Windows** with **PowerShell 5.1+** (the built-in Windows PowerShell is fine)
-- **Claude Code** (CLI or the Cursor/VS Code extension)
+- **Claude Code** (CLI or the Cursor/VS Code extension) **and/or Cursor** (its built-in Agent chat) as the planner/reviewer
 - **OpenCode >= 1.19** (`npm install -g opencode-ai`)
 - **Node.js** (LTS) for OpenCode and its plugins
 - **Python 3.11+** for the LiteLLM proxy
@@ -87,22 +88,39 @@ cd ..
 
 # 3. OpenCode agents + DCP config (+ optional rtk plugin) and the Claude skill
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install.ps1          # add -WithRtk for the rtk plugin
+#   only Claude Code: add -NoCursor      only Cursor's Agent: add -NoClaude
 ```
 
-Restart Claude Code / Cursor afterwards.
+Restart Claude Code and reload the Cursor window afterwards (Ctrl+Shift+P -> `Developer: Reload Window`).
 
 ## Usage
 
-In Claude Code, type at the **start** of a message (a slash command only triggers there):
+### Using with Claude Code
+
+In Claude Code (CLI or the Cursor/VS Code extension), type at the **start** of a message (a slash command only triggers there):
 
 ```text
 /my-agent add a dark-mode toggle to the settings screen
 /my-agent .opencode/plans/my-feature-r1.md
 ```
 
-Claude explores minimally, writes `.opencode/plans/<slug>-r1.md`, delegates, waits, reviews and loops (max 3 rounds), then reports.
+Claude explores minimally, writes `.opencode/plans/<slug>-r1.md`, delegates, waits, reviews and loops (max 3 rounds), then reports. The skill pins `model: sonnet`.
 
-You can also drive the runner yourself:
+### Using with Cursor
+
+In Cursor's own Agent chat (not the Claude Code extension), type `/` and pick **my-agent**, then your task:
+
+```text
+/my-agent add a dark-mode toggle to the settings screen
+```
+
+Cursor's agent then follows the same loop: it writes the plan to `<project>/.opencode/plans/`, runs `delegate.ps1 start` in its terminal, calls `delegate.ps1 wait -Minutes 4` repeatedly until the state is no longer `RUNNING` (short waits so a terminal-tool timeout can't cut it off), reviews with the project's real checks, and loops up to 3 rounds. **Any Cursor model can be the planner/reviewer**; which one is your choice. A cheaper model saves money, a stronger one writes better plans and reviews; the expensive implementation work goes to my-agent either way.
+
+If `/my-agent` doesn't appear, reload the window (Ctrl+Shift+P -> `Developer: Reload Window`). Cursor also loads skills from `~/.claude/skills`, so if you installed the Claude skill too you may see `/my-agent` twice; both work (the command is the Cursor-tuned one).
+
+### Running the steps yourself
+
+You can also drive the runner directly:
 
 ```powershell
 $d = "$env:MY_AGENT_HOME\scripts\delegate.ps1"   # or the full path to the repo
@@ -140,7 +158,7 @@ Claude may be open in one folder while the plan targets another. `delegate.ps1 s
 ## Tips and troubleshooting
 
 - **The skill does not show up / frontmatter ignored:** `SKILL.md` must be saved as UTF-8 **without BOM**. A BOM before `---` breaks the YAML frontmatter. Windows PowerShell 5.1's `Set-Content -Encoding utf8` writes a BOM, so use `scripts\install.ps1` (it writes without BOM). The `.ps1` files, on the other hand, are saved **with** BOM, which PowerShell 5.1 needs to read non-ASCII characters correctly.
-- **Why a skill and not a command?** The `~/.claude/commands` folder does not show up in the Cursor extension, while skills do. The slash command only triggers at the very **start** of a message.
+- **Why a skill (Claude) but a command (Cursor)?** For Claude Code, the `~/.claude/commands` folder does not show up in the Cursor extension, while skills do; the slash command only triggers at the very **start** of a message. For Cursor's Agent, custom commands are plain markdown files in `.cursor/commands/` ([Cursor 1.6 changelog](https://cursor.com/changelog/1-6)); Cursor's docs now recommend [skills](https://cursor.com/docs/skills) for new workflows, but existing commands still work, and Cursor's built-in `/migrate-to-skills` can convert the command into `~/.cursor/skills/my-agent/SKILL.md` if a future Cursor version drops commands.
 - **Fake tool calls:** some models sometimes print tool calls as plain text (e.g. a JSON block) instead of calling the tool, and then stop. Re-run the same plan with `start -Plan <same file> -Resume`; the fallback chain usually lands on a different model.
 - **`context deadline exceeded` in LiteLLM:** if a stream breaks *mid-response*, LiteLLM cannot fall back to another model (the response has already started). The run fails; re-run with `-Resume`. `stream_timeout` values in `config.yaml` control how long a silent stream may hang.
 - **DCP compress is disabled** on purpose (`"permission": "deny"` in `dcp.jsonc`): models kept calling the compress tool in loops or with fake calls, which stalled runs. Deduplication and error purging still run automatically.

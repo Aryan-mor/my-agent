@@ -29,6 +29,7 @@ Runner (PowerShell, works from any project folder):
 ## 2. Delegate
 - Run the runner with `start -Plan <plan file> -Dir <project root the plan targets>` (the folder its file paths are relative to; it may differ from your current folder). If it prints `WRONG PROJECT`, find the right project root and re-run with that `-Dir`; never let my-agent work in a project the plan was not written for. Pass the same `-Dir` to `wait`, `status` and `stop`.
 - Then run the runner with `wait`, using a 600000 ms Bash timeout. Repeat `wait` while the output says `STATE: RUNNING`.
+- If your shell tool cannot run a command for about 10 minutes (e.g. when this skill is loaded by another agent such as Cursor's), use `wait -Minutes 4` instead and repeat it the same way.
 - Do nothing else while it runs. Do not read the log, progress.md, or files in between. The `wait` output already has everything you need.
 
 ## 3. Review (cheap)
