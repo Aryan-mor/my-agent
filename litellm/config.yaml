@@ -1,0 +1,99 @@
+# LiteLLM proxy for OpenCode: RadoxAI primary, instant failover on 429 / errors.
+# Run via start-litellm.ps1 (loads keys from the repo-root .env).
+model_list:
+  # ---- primary groups used by OpenCode (auto/sonnet, auto/opus)
+  - model_name: sonnet
+    litellm_params:
+      model: openai/claude-sonnet-5
+      api_base: https://radoxai.com/v1
+      api_key: os.environ/RADOX_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 300
+  - model_name: opus
+    litellm_params:
+      model: openai/claude-opus-5.5
+      api_base: https://radoxai.com/v1
+      api_key: os.environ/RADOX_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 300
+  # ---- NVIDIA NIM free API (strong free models)
+  - model_name: nvidia-nemotron
+    litellm_params:
+      model: openai/nvidia/nemotron-3-ultra-550b-a55b
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      max_retries: 0
+      stream_timeout: 60
+      timeout: 300
+  - model_name: nvidia-glm
+    litellm_params:
+      model: openai/z-ai/glm-5.3
+      api_base: https://integrate.api.nvidia.com/v1
+      api_key: os.environ/NVIDIA_API_KEY
+      max_retries: 0
+      stream_timeout: 40
+      timeout: 300
+  # ---- fallback groups
+  # Google Gemini via the native gemini/ provider. NOTE: the key is read from OPENAI_API_KEY
+  # (kept for compatibility with the original setup); put your Google AI Studio key there.
+  - model_name: gemini-flash
+    litellm_params:
+      # native gemini/ provider (same key): handles Gemini 3 thought_signature on
+      # tool-call history coming from Claude; openai/ compat endpoint 400s on that.
+      model: gemini/gemini-3.5-flash
+      api_key: os.environ/OPENAI_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 300
+  - model_name: radox-gpt
+    litellm_params:
+      model: openai/gpt-5.5
+      api_base: https://radoxai.com/v1
+      api_key: os.environ/RADOX_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 300
+  - model_name: radox-kimi
+    litellm_params:
+      model: openai/kimi-k3
+      api_base: https://radoxai.com/v1
+      api_key: os.environ/RADOX_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 300
+
+  # last resort (optional): local OpenAI-compatible GLM bridge on :3001, started by agent.ps1
+  # only when GLM_BRIDGE_DIR is set. If you have no bridge, this entry simply fails and is skipped.
+  - model_name: glm
+    litellm_params:
+      model: openai/glm-5.3
+      api_base: http://127.0.0.1:3001/v1
+      api_key: os.environ/GLM_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 300
+
+litellm_settings:
+  drop_params: true
+  num_retries: 0
+  request_timeout: 600
+  max_fallbacks: 8
+  # fallbacks also apply to 429 RateLimitError (no waiting on Retry-After)
+  fallbacks:
+    - sonnet: ["nvidia-nemotron", "nvidia-glm", "gemini-flash", "radox-gpt", "radox-kimi", "glm"]
+    - opus: ["sonnet", "nvidia-nemotron", "nvidia-glm", "gemini-flash", "radox-gpt", "radox-kimi", "glm"]
+
+router_settings:
+  routing_strategy: simple-shuffle
+  num_retries: 0          # no retry on primary -> go straight to fallback
+  retry_after: 0
+  allowed_fails: 1        # 1 failure (e.g. 429) -> deployment cooled down
+  cooldown_time: 20       # short cooldown so a burst of errors does not block every model for a minute
+  disable_cooldowns: false
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+

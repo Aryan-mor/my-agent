@@ -1,0 +1,27 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# python / litellm
+.venv/
+venv/
+__pycache__/
+*.pyc
+litellm/litellm.log
+litellm/litellm.err.log
+
+# node / opencode
+node_modules/
+.opencode/
+*.session.json
+
+# backups, logs, misc
+*.bak
+*.bak-*
+*.log
+logs/
+graphify-out/
+.aider*
+.DS_Store
+Thumbs.db
