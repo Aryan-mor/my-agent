@@ -11,20 +11,60 @@
       },
       "models": {
         "sonnet": {
-          "name": "Sonnet (radox -> gemini/gpt/kimi/glm)",
+          "name": "Free chain (Kilo -> OpenRouter -> Gemini -> NVIDIA -> GLM -> local)",
           "tool_call": true,
           "limit": {
-            "context": 200000,
-            "output": 32000
+            "context": 80000,
+            "output": 16000
           }
         },
         "opus": {
-          "name": "Opus (radox -> sonnet -> gemini/gpt/kimi/glm)",
+          "name": "Free chain, strong first (Nemotron -> GLM -> Gemini -> Kilo -> local)",
           "tool_call": true,
           "limit": {
-            "context": 200000,
-            "output": 32000
+            "context": 80000,
+            "output": 16000
           }
+        },
+        "ollama-local": {
+          "name": "Local Ollama model (MYAGENT_LOCAL_MODEL, only when MYAGENT_LOCAL=on)",
+          "tool_call": true,
+          "limit": {
+            "context": 32768,
+            "output": 8192
+          }
+        }
+      }
+    },
+    "kilo": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Kilo (free)",
+      "options": {
+        "baseURL": "https://api.kilo.ai/api/gateway",
+        "apiKey": "{env:KILO_API_KEY}"
+      },
+      "models": {
+        "kilo-auto/free": {
+          "name": "Kilo Auto Free",
+          "tool_call": true
+        }
+      }
+    },
+    "openrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenRouter (free)",
+      "options": {
+        "baseURL": "https://openrouter.ai/api/v1",
+        "apiKey": "{env:OPENROUTER_API_KEY}"
+      },
+      "models": {
+        "nvidia/nemotron-3-ultra-550b-a55b:free": {
+          "name": "Nemotron 3 Ultra 550B (free)",
+          "tool_call": true
+        },
+        "openrouter/free": {
+          "name": "OpenRouter Auto Free",
+          "tool_call": true
         }
       }
     },
@@ -54,22 +94,6 @@
       "models": {
         "glm-5.3": {
           "name": "GLM 5.3 (Anthropic)"
-        }
-      }
-    },
-    "radox": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "RadoxAI",
-      "options": {
-        "baseURL": "https://radoxai.com/v1",
-        "apiKey": "{env:RADOX_API_KEY}"
-      },
-      "models": {
-        "claude-opus-5.5": {
-          "name": "Claude Opus 5.5 (Radox)"
-        },
-        "claude-sonnet-5": {
-          "name": "Claude Sonnet 5"
         }
       }
     },

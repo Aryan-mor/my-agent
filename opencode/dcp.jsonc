@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
-  // Moderately more aggressive than defaults to cut tokens/min on rate-limited providers (e.g. a RadoxAI Starter TPM limit).
+  // Moderately more aggressive than defaults to cut tokens/min on rate-limited providers (e.g. free-tier TPM limits).
   "pruneNotification": "minimal",
   "compress": {
     // models kept misusing the compress tool (fake/looping calls); disable it, keep automatic pruning

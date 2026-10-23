@@ -1,24 +1,61 @@
-# LiteLLM proxy for OpenCode: RadoxAI primary, instant failover on 429 / errors.
-# Run via start-litellm.ps1 (loads keys from the repo-root .env).
+# LiteLLM proxy for OpenCode: free provider chain with instant failover on 429 / errors.
+#   Kilo -> OpenRouter -> Gemini -> NVIDIA NIM -> GLM bridge -> local Ollama (last, optional)
+# Do NOT run this file directly: start-litellm.ps1 renders it into config.generated.yaml,
+# filling the local model from .env (MYAGENT_LOCAL_MODEL / MYAGENT_LOCAL_URL) when MYAGENT_LOCAL=on,
+# and removing the whole ollama-local block + its fallback entries when MYAGENT_LOCAL=off.
+# Providers whose key is missing simply fail and are skipped by the fallback chain.
 model_list:
   # ---- primary groups used by OpenCode (auto/sonnet, auto/opus)
   - model_name: sonnet
     litellm_params:
-      model: openai/claude-sonnet-5
-      api_base: https://radoxai.com/v1
-      api_key: os.environ/RADOX_API_KEY
+      model: openai/kilo-auto/free
+      api_base: https://api.kilo.ai/api/gateway
+      api_key: os.environ/KILO_API_KEY
       max_retries: 0
       stream_timeout: 90
-      timeout: 300
+      timeout: 90
   - model_name: opus
     litellm_params:
-      model: openai/claude-opus-5.5
-      api_base: https://radoxai.com/v1
-      api_key: os.environ/RADOX_API_KEY
+      model: openai/nvidia/nemotron-3-ultra-550b-a55b:free
+      api_base: https://openrouter.ai/api/v1
+      api_key: os.environ/OPENROUTER_API_KEY
       max_retries: 0
       stream_timeout: 90
-      timeout: 300
-  # ---- NVIDIA NIM free API (strong free models)
+      timeout: 90
+  # ---- free fallback groups
+  - model_name: kilo-free
+    litellm_params:
+      model: openai/kilo-auto/free
+      api_base: https://api.kilo.ai/api/gateway
+      api_key: os.environ/KILO_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 90
+  - model_name: openrouter-nemotron
+    litellm_params:
+      model: openai/nvidia/nemotron-3-ultra-550b-a55b:free
+      api_base: https://openrouter.ai/api/v1
+      api_key: os.environ/OPENROUTER_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 90
+  - model_name: openrouter-free
+    litellm_params:
+      model: openai/openrouter/free
+      api_base: https://openrouter.ai/api/v1
+      api_key: os.environ/OPENROUTER_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 90
+  # Google Gemini via the native gemini/ provider (handles Gemini thought_signature on tool-call history).
+  # NOTE: the key is read from OPENAI_API_KEY (kept for compatibility); put your Google AI Studio key there.
+  - model_name: gemini-flash
+    litellm_params:
+      model: gemini/gemini-3.5-flash
+      api_key: os.environ/OPENAI_API_KEY
+      max_retries: 0
+      stream_timeout: 90
+      timeout: 90
   - model_name: nvidia-nemotron
     litellm_params:
       model: openai/nvidia/nemotron-3-ultra-550b-a55b
@@ -26,7 +63,7 @@ model_list:
       api_key: os.environ/NVIDIA_API_KEY
       max_retries: 0
       stream_timeout: 60
-      timeout: 300
+      timeout: 90
   - model_name: nvidia-glm
     litellm_params:
       model: openai/z-ai/glm-5.3
@@ -34,38 +71,8 @@ model_list:
       api_key: os.environ/NVIDIA_API_KEY
       max_retries: 0
       stream_timeout: 40
-      timeout: 300
-  # ---- fallback groups
-  # Google Gemini via the native gemini/ provider. NOTE: the key is read from OPENAI_API_KEY
-  # (kept for compatibility with the original setup); put your Google AI Studio key there.
-  - model_name: gemini-flash
-    litellm_params:
-      # native gemini/ provider (same key): handles Gemini 3 thought_signature on
-      # tool-call history coming from Claude; openai/ compat endpoint 400s on that.
-      model: gemini/gemini-3.5-flash
-      api_key: os.environ/OPENAI_API_KEY
-      max_retries: 0
-      stream_timeout: 90
-      timeout: 300
-  - model_name: radox-gpt
-    litellm_params:
-      model: openai/gpt-5.5
-      api_base: https://radoxai.com/v1
-      api_key: os.environ/RADOX_API_KEY
-      max_retries: 0
-      stream_timeout: 90
-      timeout: 300
-  - model_name: radox-kimi
-    litellm_params:
-      model: openai/kimi-k3
-      api_base: https://radoxai.com/v1
-      api_key: os.environ/RADOX_API_KEY
-      max_retries: 0
-      stream_timeout: 90
-      timeout: 300
-
-  # last resort (optional): local OpenAI-compatible GLM bridge on :3001, started by agent.ps1
-  # only when GLM_BRIDGE_DIR is set. If you have no bridge, this entry simply fails and is skipped.
+      timeout: 90
+  # optional local OpenAI-compatible GLM bridge on :3001 (started by agent.ps1 only when GLM_BRIDGE_DIR is set)
   - model_name: glm
     litellm_params:
       model: openai/glm-5.3
@@ -73,17 +80,28 @@ model_list:
       api_key: os.environ/GLM_API_KEY
       max_retries: 0
       stream_timeout: 90
+      timeout: 90
+  # >>> ollama-local (generated from .env; removed when MYAGENT_LOCAL=off)
+  - model_name: ollama-local
+    litellm_params:
+      model: openai/__MYAGENT_LOCAL_MODEL__
+      api_base: __MYAGENT_LOCAL_URL__
+      api_key: ollama
+      max_retries: 0
+      stream_timeout: 300
       timeout: 300
+  # <<< ollama-local
 
 litellm_settings:
   drop_params: true
   num_retries: 0
   request_timeout: 600
-  max_fallbacks: 8
-  # fallbacks also apply to 429 RateLimitError (no waiting on Retry-After)
+  max_fallbacks: 10
+  # fallbacks also apply to 429 RateLimitError (no waiting on Retry-After). Keep flow style: the
+  # start script removes `, "ollama-local"` from these lines when the local model is off.
   fallbacks:
-    - sonnet: ["nvidia-nemotron", "nvidia-glm", "gemini-flash", "radox-gpt", "radox-kimi", "glm"]
-    - opus: ["sonnet", "nvidia-nemotron", "nvidia-glm", "gemini-flash", "radox-gpt", "radox-kimi", "glm"]
+    - sonnet: ["openrouter-nemotron", "gemini-flash", "nvidia-nemotron", "openrouter-free", "glm", "ollama-local"]
+    - opus: ["nvidia-glm", "gemini-flash", "kilo-free", "openrouter-free", "glm", "ollama-local"]
 
 router_settings:
   routing_strategy: simple-shuffle
@@ -95,5 +113,3 @@ router_settings:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
-
-

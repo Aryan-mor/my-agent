@@ -6,7 +6,7 @@ my-agent is a small, opinionated coding workflow for **Windows (PowerShell 5.1+)
 
 - **Claude Code** (model `sonnet`, e.g. inside the Cursor IDE extension) **or Cursor's own Agent** (any model you pick in Cursor) only **plans** and **reviews**.
 - A cheap **OpenCode** agent called **my-agent** (`orchestrator` + `implementer`) does the actual **implementation**.
-- A local **LiteLLM** proxy routes my-agent's requests to inexpensive providers (RadoxAI, NVIDIA NIM, Gemini, an optional GLM bridge) with instant fallbacks on rate limits and errors.
+- A local **LiteLLM** proxy routes my-agent's requests through a chain of **free** providers (Kilo -> OpenRouter -> Gemini -> NVIDIA NIM -> optional GLM bridge -> optional **local Ollama model**) with instant fallbacks on rate limits and errors. The local model is switched on/off and chosen in `.env` (`MYAGENT_LOCAL`, `MYAGENT_LOCAL_MODEL`).
 
 ### Why?
 
@@ -46,8 +46,9 @@ flowchart TD
 | `opencode/plugins/rtk.ts` | *Optional.* OpenCode plugin that rewrites shell commands to use [rtk](https://github.com/rtk-ai/rtk), a token-saving CLI output compressor. Disabled automatically if `rtk` is not on PATH. | `~/.config/opencode/plugins/` |
 | `opencode/opencode.jsonc`, `opencode/package.json` | Minimal global OpenCode config and plugin dependency (`@opencode-ai/plugin`). Only created if missing. | `~/.config/opencode/` |
 | `opencode.json` | Project-level OpenCode config: `auto` provider -> LiteLLM (`{env:LITELLM_MASTER_KEY}`), direct providers, permissions (pushes/destructive commands ask), DCP plugin. Used via `OPENCODE_CONFIG`. | stays in repo |
-| `litellm/config.yaml` | LiteLLM proxy on `127.0.0.1:4000`: `sonnet`/`opus` groups on RadoxAI with fallbacks to NVIDIA NIM, Gemini, RadoxAI GPT/Kimi and an optional GLM bridge. No retries, short cooldowns. | stays in repo |
-| `litellm/start-litellm.ps1` | Starts the proxy hidden (or `-Foreground`), loading keys from `.env`. | stays in repo |
+| `litellm/config.yaml` | LiteLLM proxy on `127.0.0.1:4000`: `sonnet` (Kilo) / `opus` (OpenRouter Nemotron) groups with free fallbacks (OpenRouter, Gemini, NVIDIA NIM, GLM bridge) and the local `ollama-local` model last. Template: `start-litellm.ps1` renders it to `config.generated.yaml` from `.env`. No retries, short cooldowns. | stays in repo |
+| `litellm/start-litellm.ps1` | Starts the proxy hidden (or `-Foreground`), loading keys from `.env`; adds or drops the local Ollama model per `MYAGENT_LOCAL`. | stays in repo |
+| `scripts/my-agent-local.ps1` | `on` / `off` / `status` (and `on -Model <tag>`): toggles the local Ollama model in `.env` and restarts LiteLLM. | stays in repo |
 | `litellm/test_proxy.py` | Smoke test for the proxy: streaming, tool calls, mocked 429 fallbacks. | stays in repo |
 | `scripts/agent.ps1` | Launches OpenCode with this config; starts LiteLLM (and the optional GLM bridge) if not running. | stays in repo |
 | `scripts/delegate.ps1` | `start` / `wait` / `status` / `stop` for headless runs (details below). | stays in repo |
@@ -63,12 +64,13 @@ flowchart TD
 - **Node.js** (LTS) for OpenCode and its plugins
 - **Python 3.11+** for the LiteLLM proxy
 - **git**
-- API keys: **RadoxAI** (primary), optionally **NVIDIA NIM** and **Google Gemini** (see [`.env.example`](.env.example))
+- Free API keys: **Kilo** and/or **OpenRouter**, optionally **Google Gemini** and **NVIDIA NIM** (see [`.env.example`](.env.example)); the setup agent can sign up for you with `SIGNUP_EMAIL` / `SIGNUP_PASSWORD`
+- *Optional:* **Ollama** with a coding model (e.g. `qwen3-coder:30b`) as a local last-resort fallback
 - *Optional:* [graphify](https://github.com/Graphify-Labs/graphify) (code knowledge graph, makes the agent much faster) and [rtk](https://github.com/rtk-ai/rtk)
 
 ## Quick install
 
-> Prefer a guided setup? Give [`AGENT_SETUP.md`](AGENT_SETUP.md) to your own AI coding agent and say *"set up my-agent for me following AGENT_SETUP.md"*.
+> **Recommended: let an agent do it.** Open **Claude Code** or **Grok Bot** in this folder and say *"Set up my-agent for me following [SETUP.md](SETUP.md)"*. It installs prerequisites (to a drive you choose), signs up for the free providers with `SIGNUP_EMAIL` / `SIGNUP_PASSWORD` from `.env`, writes the keys into `.env`, sets up Ollama if `MYAGENT_LOCAL=on`, starts LiteLLM, installs the skill and verifies everything. Claude Code first gets a browser via Playwright MCP.
 
 ```powershell
 git clone https://github.com/Aryan-mor/my-agent.git
@@ -76,7 +78,7 @@ cd my-agent
 
 # 1. secrets
 Copy-Item .env.example .env
-notepad .env          # fill in LITELLM_MASTER_KEY and RADOX_API_KEY at least
+notepad .env          # LITELLM_MASTER_KEY + KILO_API_KEY and/or OPENROUTER_API_KEY; MYAGENT_LOCAL=on|off, MYAGENT_LOCAL_MODEL
 
 # 2. LiteLLM proxy
 cd litellm
@@ -164,7 +166,8 @@ Claude may be open in one folder while the plan targets another. `delegate.ps1 s
 - **DCP compress is disabled** on purpose (`"permission": "deny"` in `dcp.jsonc`): models kept calling the compress tool in loops or with fake calls, which stalled runs. Deduplication and error purging still run automatically.
 - **`empty.txt` is locked / start fails:** a leftover LiteLLM (or bridge) process from an earlier run can keep `.opencode/delegate/empty.txt` (used as stdin) open. `delegate.ps1` reuses the existing file; if it still fails, stop the old process (Task Manager -> `litellm.exe`) and run `start` again.
 - **LiteLLM won't start:** look at `litellm/litellm.err.log`, or run `litellm\start-litellm.ps1 -Foreground`. Check that port 4000 is free.
-- **Missing optional keys:** fallbacks whose key is empty (NVIDIA, Gemini) or the GLM bridge that isn't running simply fail and are skipped in the chain. Only `RADOX_API_KEY` and `LITELLM_MASTER_KEY` are needed for the primary path.
+- **Missing optional keys:** fallbacks whose key is empty (NVIDIA, Gemini) or the GLM bridge that isn't running simply fail and are skipped in the chain. Only `LITELLM_MASTER_KEY` plus `KILO_API_KEY` or `OPENROUTER_API_KEY` are needed for the primary path.
+- **Local model:** `scripts\my-agent-local.ps1 status|on|off` (`on -Model qwen2.5-coder:7b` to switch model). With `MYAGENT_LOCAL=off` the `ollama-local` model is removed from LiteLLM entirely.
 - **Different provider/models:** edit `litellm/config.yaml`; OpenCode only ever sees the `auto/sonnet` and `auto/opus` groups.
 
 ## License

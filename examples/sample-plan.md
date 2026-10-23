@@ -2,7 +2,7 @@
 
 Goal: tiny smoke test for my-agent. Add a `greet()` function and a unit test for it.
 Run from a scratch project folder that already contains `hello/greet.py`
-(see AGENT_SETUP.md, "Smoke test"); `hello/test_greet.py` is a new file.
+(see SETUP.md, "Smoke test"); `hello/test_greet.py` is a new file.
 
 ## Steps
 

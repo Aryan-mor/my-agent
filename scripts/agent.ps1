@@ -33,7 +33,7 @@ if ($glmDir -and (Test-Path $glmDir)) {
         if (-not (Test-Glm)) { Write-Warning "GLM bridge did not start on port 3001. Check the start.bat window." }
     }
 }
-# LiteLLM failover proxy (127.0.0.1:4000): radox -> nvidia/gemini/gpt/kimi/glm on 429 / errors
+# LiteLLM failover proxy (127.0.0.1:4000): free chain Kilo -> OpenRouter -> Gemini -> NVIDIA -> GLM -> local Ollama (if MYAGENT_LOCAL=on)
 $litellmDir = if ($env:LITELLM_DIR) { $env:LITELLM_DIR } else { Join-Path $root "litellm" }
 $litellmStart = Join-Path $litellmDir "start-litellm.ps1"
 function Test-Litellm { try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:4000/health/liveliness" -TimeoutSec 2 | Out-Null; $true } catch { $false } }
@@ -41,7 +41,7 @@ if ((Test-Path $litellmStart) -and -not (Test-Litellm)) {
     Write-Host "Starting LiteLLM proxy (start-litellm.ps1)..."
     & $litellmStart
     for ($i = 0; $i -lt 60 -and -not (Test-Litellm); $i++) { Start-Sleep -Seconds 1 }
-    if (-not (Test-Litellm)) { Write-Warning "LiteLLM proxy did not start on port 4000. See $(Join-Path $litellmDir 'litellm.err.log') (auto/* models will fail; radox/* still work)." }
+    if (-not (Test-Litellm)) { Write-Warning "LiteLLM proxy did not start on port 4000. See $(Join-Path $litellmDir 'litellm.err.log') (auto/* models will fail; direct kilo/* and openrouter/* providers still work)." }
 }
 $opencode = Join-Path $env:APPDATA "npm\opencode.cmd"
 if (-not (Test-Path $opencode)) {
