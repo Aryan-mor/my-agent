@@ -70,7 +70,7 @@ flowchart TD
 
 ## Quick install
 
-> **Recommended: let an agent do it.** Open **Claude Code** or **Grok Bot** in this folder and say *"Set up my-agent for me following [SETUP.md](SETUP.md)"*. It installs prerequisites (to a drive you choose), signs up for the free providers with `SIGNUP_EMAIL` / `SIGNUP_PASSWORD` from `.env`, writes the keys into `.env`, sets up Ollama if `MYAGENT_LOCAL=on`, starts LiteLLM, installs the skill and verifies everything. Claude Code first gets a browser via Playwright MCP.
+> **Recommended: let an agent do it.** Ask **Grok Bot**, or open this folder in **Cursor** (Agent mode), and say *"Set up my-agent for me following [SETUP.md](SETUP.md)"*. It installs prerequisites (to a drive you choose), signs up for the free providers with `SIGNUP_EMAIL` / `SIGNUP_PASSWORD` from `.env`, writes the keys into `.env`, sets up Ollama if `MYAGENT_LOCAL=on`, starts LiteLLM, installs the skill and verifies everything. Grok Bot signs up in its own browser; Cursor uses its built-in browser if available, otherwise asks you to paste each key. Nothing extra (Playwright etc.) is installed.
 
 ```powershell
 git clone https://github.com/Aryan-mor/my-agent.git
@@ -167,6 +167,7 @@ Claude may be open in one folder while the plan targets another. `delegate.ps1 s
 - **`empty.txt` is locked / start fails:** a leftover LiteLLM (or bridge) process from an earlier run can keep `.opencode/delegate/empty.txt` (used as stdin) open. `delegate.ps1` reuses the existing file; if it still fails, stop the old process (Task Manager -> `litellm.exe`) and run `start` again.
 - **LiteLLM won't start:** look at `litellm/litellm.err.log`, or run `litellm\start-litellm.ps1 -Foreground`. Check that port 4000 is free.
 - **Missing optional keys:** fallbacks whose key is empty (NVIDIA, Gemini) or the GLM bridge that isn't running simply fail and are skipped in the chain. Only `LITELLM_MASTER_KEY` plus `KILO_API_KEY` or `OPENROUTER_API_KEY` are needed for the primary path.
+- **LiteLLM port:** `LITELLM_PORT` in `.env` (default 4000); `opencode.json` uses `{env:LITELLM_PORT}`, which `scripts\agent.ps1` sets (also when it is missing). If you run `opencode` directly with this config, set `LITELLM_PORT` first.
 - **Local model:** `scripts\my-agent-local.ps1 status|on|off` (`on -Model qwen2.5-coder:7b` to switch model). With `MYAGENT_LOCAL=off` the `ollama-local` model is removed from LiteLLM entirely.
 - **Different provider/models:** edit `litellm/config.yaml`; OpenCode only ever sees the `auto/sonnet` and `auto/opus` groups.
 
