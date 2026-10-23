@@ -1,6 +1,6 @@
-# my-agent: setup guide for an AI agent (Grok Bot or Cursor)
+# my-agent: setup guide for an AI agent (Grok Bot, Claude Code or Cursor)
 
-> **For you (the human):** fill in `SIGNUP_EMAIL` / `SIGNUP_PASSWORD` in `.env` if you want the agent to create the free provider accounts for you (optional), then ask **Grok Bot**, or open this folder in **Cursor** (Agent mode), and say:
+> **For you (the human):** fill in `SIGNUP_EMAIL` / `SIGNUP_PASSWORD` in `.env` if you want the agent to create the free provider accounts for you (optional), then ask **Grok Bot**, or open this folder in **Claude Code** or **Cursor** (Agent mode), and say:
 >
 > **"Set up my-agent for me following SETUP.md."**
 >
@@ -17,7 +17,8 @@ You are setting up **my-agent** (this repository) for the user: Claude Code (or 
 
 - **Grok Bot** (desktop assistant with its own browser and a shell on the user's PC): run every command on the user's Windows PC in PowerShell, and do the provider sign-ups in your browser (Step 4).
 - **Cursor (Agent mode)**: run every command in Cursor's terminal tool. For the sign-ups (Step 4) use Cursor's **built-in browser tool** if it is available in this session; otherwise give the user the signup URL and key page for each provider, and ask them to paste the key into `.env` themselves (or paste it to you so you write it with `Set-EnvValue`).
-- Do **not** install extra browser tooling (Playwright, browser extensions, MCP servers) on the user's PC. Other agents (e.g. Claude Code): see the optional appendix at the end.
+- **Claude Code**: run every command in your shell. For the sign-ups use **Claude in Chrome**: the user's Chrome with the Claude extension, connected by running `/chrome` in Claude Code (check that it shows as connected). If it is not available, ask the user for each key as Cursor does. (Alternative only if the user asks for it: Playwright MCP, `claude mcp add --scope user playwright -- npx @playwright/mcp@latest`.)
+- Do **not** install extra browser tooling (Playwright, browser extensions, MCP servers) on the user's PC unless the user asks.
 
 ### Rules for you
 
@@ -87,7 +88,7 @@ Read the credentials from `.env` without printing them:
 $su = @{}; Get-Content .env | Where-Object { $_ -match '^(SIGNUP_EMAIL|SIGNUP_PASSWORD)=(.*)$' } | ForEach-Object { $su[$Matches[1]] = $Matches[2] }
 ```
 
-If both are set, use them to create accounts on each site below in your browser (Grok Bot: your own browser; Cursor: its built-in browser tool if available, otherwise hand each site to the user and ask for the key). If the user prefers, use **"Continue with Google"** instead (the user may need to log in once). If they are empty, ask the user whether to sign up for them (they type credentials themselves) or to paste keys.
+If both are set, use them to create accounts on each site below in your browser (Grok Bot: your own browser; Claude Code: Claude in Chrome via `/chrome`; Cursor: its built-in browser tool if available, otherwise hand each site to the user and ask for the key). If the user prefers, use **"Continue with Google"** instead (the user may need to log in once). If they are empty, ask the user whether to sign up for them (they type credentials themselves) or to paste keys.
 For each provider: sign up / log in -> confirm the email if asked (ask the user for the code/link) -> open the key page -> create a key -> copy it straight into `.env` with `Set-EnvValue` (never into the chat). If a site refuses or needs a phone number, tell the user and move on; every provider is optional except that **at least one of Kilo / OpenRouter** is needed.
 
 | # | Provider (role in chain) | Sign up | Key page / what to click | `.env` variable |
@@ -279,21 +280,3 @@ Explain in plain words:
 - [ ] Smoke test: `STATE: FINISHED`, tests in the scratch folder pass
 - [ ] Wrong-project guard: printed `WRONG PROJECT` for the wrong `-Dir`
 - [ ] No API key was printed in the chat or terminal output
-
----
-
-## Appendix (optional) - Claude Code as the setup agent
-
-Only if the user explicitly wants Claude Code to run this guide **and** agrees to install browser tooling. Otherwise Claude Code simply asks the user for each key. Do this before Step 1:
-
-Install the official [Playwright MCP](https://github.com/microsoft/playwright-mcp) server (user scope, so it works in every project). Point the npm cache at the chosen drive first so nothing large lands on C: (skip if C: is fine):
-
-```powershell
-npm config set cache "$INSTALL_ROOT\npm-cache"          # e.g. D:\npm-cache ; npx uses the same cache
-claude mcp add --scope user playwright -- npx @playwright/mcp@latest
-# if Windows cannot start npx directly, use:  claude mcp add --scope user playwright -- cmd /c npx -y @playwright/mcp@latest
-claude mcp list                                          # expect: playwright ... connected
-```
-
-Then **restart Claude Code** so the `browser_*` tools appear. The browser profile is stored under `%LOCALAPPDATA%\ms-playwright`; to keep it on another drive add `--user-data-dir "$INSTALL_ROOT\playwright-profile"` after `@playwright/mcp@latest`.
-Alternative: the **Claude in Chrome** extension (lets Claude Code drive the user's own Chrome). Either is fine; without any browser, fall back to asking the user for each key.

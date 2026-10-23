@@ -70,7 +70,7 @@ flowchart TD
 
 ## Quick install
 
-> **Recommended: let an agent do it.** Ask **Grok Bot**, or open this folder in **Cursor** (Agent mode), and say *"Set up my-agent for me following [SETUP.md](SETUP.md)"*. It installs prerequisites (to a drive you choose), signs up for the free providers with `SIGNUP_EMAIL` / `SIGNUP_PASSWORD` from `.env`, writes the keys into `.env`, sets up Ollama if `MYAGENT_LOCAL=on`, starts LiteLLM, installs the skill and verifies everything. Grok Bot signs up in its own browser; Cursor uses its built-in browser if available, otherwise asks you to paste each key. Nothing extra (Playwright etc.) is installed.
+> **Recommended: let an agent do it.** Ask **Grok Bot**, or open this folder in **Claude Code** or **Cursor** (Agent mode), and say *"Set up my-agent for me following [SETUP.md](SETUP.md)"*. It installs prerequisites (to a drive you choose), signs up for the free providers with `SIGNUP_EMAIL` / `SIGNUP_PASSWORD` from `.env`, writes the keys into `.env`, sets up Ollama if `MYAGENT_LOCAL=on`, starts LiteLLM, installs the skill and verifies everything. Grok Bot signs up in its own browser, Claude Code uses Claude in Chrome (`/chrome`), Cursor uses its built-in browser if available, otherwise asks you to paste each key. Nothing extra (Playwright etc.) is installed.
 
 ```powershell
 git clone https://github.com/Aryan-mor/my-agent.git
